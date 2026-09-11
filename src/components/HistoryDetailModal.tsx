@@ -47,6 +47,109 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownloadFile = (format: 'txt' | 'csv' | 'md') => {
+    const bom = '\uFEFF';
+    const sorted = [...archive.whiteboard.stickies].sort((a, b) => b.votes - a.votes);
+    const safeTopic = archive.topic.replace(/[\\/:*?"<>|\s]+/g, '_');
+    const filenameBase = `회의기록_${safeTopic}_${archive.roomCode}`;
+
+    if (format === 'csv') {
+      const csvRows: string[] = [];
+      csvRows.push(['순위', '카테고리', '아이디어 내용', '추천수(표)', '작성자', '도출 라운드'].map((c) => `"${c}"`).join(','));
+      sorted.forEach((s, idx) => {
+        const textEsc = s.text.replace(/"/g, '""');
+        const authorEsc = s.authorName.replace(/"/g, '""');
+        const catEsc = (s.category || '일반').replace(/"/g, '""');
+        csvRows.push([
+          idx + 1,
+          `"${catEsc}"`,
+          `"${textEsc}"`,
+          s.votes,
+          `"${authorEsc}"`,
+          s.round ? `${s.round}라운드` : '토론추가',
+        ].join(','));
+      });
+      const blob = new Blob([bom + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filenameBase}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    if (format === 'txt') {
+      const lines: string[] = [];
+      lines.push(`=======================================================`);
+      lines.push(`[사일런트 브레인스토밍 회의록] ${archive.topic}`);
+      lines.push(`=======================================================`);
+      lines.push(`회의 일시: ${new Date(archive.date).toLocaleString('ko-KR')}`);
+      lines.push(`입장 코드: ${archive.roomCode}`);
+      lines.push(`참여자: ${archive.participants.map((p) => p.name).join(', ')}`);
+      lines.push(`총 도출된 아이디어: ${archive.totalIdeasCount}개`);
+      lines.push(``);
+      lines.push(`-------------------------------------------------------`);
+      lines.push(`[1] 인기 아이디어 TOP 순위`);
+      lines.push(`-------------------------------------------------------`);
+      sorted.forEach((s, idx) => {
+        lines.push(`${idx + 1}. [${s.category}] ${s.text} (추천 ${s.votes}표 | 작성: ${s.authorName})`);
+      });
+      lines.push(``);
+      lines.push(`-------------------------------------------------------`);
+      lines.push(`[2] 라운드별 시트 발전 내역`);
+      lines.push(`-------------------------------------------------------`);
+      archive.sheets.forEach((sheet, sIdx) => {
+        lines.push(`시트 #${sIdx + 1} (원작성자: ${archive.isAnonymous ? '익명' : sheet.originalOwnerName})`);
+        sheet.rounds.forEach((r) => {
+          lines.push(`  [라운드 ${r.round}] 작성: ${archive.isAnonymous ? '익명' : r.authorName}`);
+          r.ideas.forEach((idea, i) => {
+            lines.push(`    - ${idea}`);
+          });
+        });
+        lines.push(``);
+      });
+
+      const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filenameBase}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // Markdown
+    let md = `# [사일런트 브레인스토밍] ${archive.topic}\n\n`;
+    md += `- **회의 코드**: ${archive.roomCode}\n`;
+    md += `- **일시**: ${new Date(archive.date).toLocaleString('ko-KR')}\n`;
+    md += `- **참여자**: ${archive.participants.map((p) => p.name).join(', ')}\n\n`;
+    md += `## 🏆 화이트보드 아이디어 및 투표\n`;
+    sorted.forEach((s, idx) => {
+      md += `${idx + 1}. **${s.text}** (추천: ${s.votes}표 / ${s.category})\n`;
+    });
+    md += `\n## 📜 시트별 아이디어 발전 내역\n`;
+    archive.sheets.forEach((sheet, sIdx) => {
+      md += `### 시트 #${sIdx + 1} (원작성자: ${archive.isAnonymous ? '익명' : sheet.originalOwnerName})\n`;
+      sheet.rounds.forEach((r) => {
+        md += `- **라운드 ${r.round}** (${archive.isAnonymous ? '익명' : r.authorName}):\n`;
+        r.ideas.forEach((idea, i) => {
+          md += `  ${i + 1}) ${idea}\n`;
+        });
+      });
+      md += `\n`;
+    });
+
+    const blob = new Blob([bom + md.replace(/\n/g, '\r\n')], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filenameBase}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const sortedStickies = [...archive.whiteboard.stickies].sort((a, b) => b.votes - a.votes);
 
   return (
@@ -80,6 +183,28 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                id="history-download-txt-btn"
+                type="button"
+                onClick={() => handleDownloadFile('txt')}
+                className="flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                title="텍스트 파일 (.txt) 저장"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">.TXT</span>
+              </button>
+            </div>
+            <button
+              id="history-download-csv-btn"
+              type="button"
+              onClick={() => handleDownloadFile('csv')}
+              className="flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+              title="엑셀 파일 (.csv) 저장"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">.CSV</span>
+            </button>
             <button
               id="history-copy-md-btn"
               type="button"

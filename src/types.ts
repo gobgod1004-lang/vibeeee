@@ -2,6 +2,17 @@ export interface User {
   id: string;
   name: string;
   avatarColor: string;
+  email?: string;
+  isGuest?: boolean;
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  avatarColor: string;
+  passwordHash?: string;
+  createdAt: number;
 }
 
 export interface IdeaItem {
@@ -23,7 +34,7 @@ export interface BrainSheet {
     round: number;
     authorId: string;
     authorName: string;
-    ideas: [string, string, string]; // exactly 3 ideas per round
+    ideas: string[]; // typically 3 ideas per round, customizable (2~5)
   }[];
 }
 
@@ -31,7 +42,9 @@ export interface StickyNote {
   id: string;
   text: string;
   category?: string;
+  authorId?: string;
   authorName: string;
+  round?: number;
   color: string;
   x: number;
   y: number;
@@ -62,10 +75,14 @@ export interface ChatMessage {
 
 export type RoomPhase = 'lobby' | 'writing' | 'rotating' | 'discussion' | 'finished';
 
+export type CanvasRatio = '16:9' | '4:3' | '21:9' | '1:1' | 'auto';
+
 export interface RoomSettings {
   roundDurationSec: number; // default 300 (5 mins)
   totalRounds: number; // default 5 (or participant count)
   isAnonymous: boolean; // whether ideas show author or anonymous
+  ideasPerRound: number; // 2, 3, 4, 5 ideas per round (default 3)
+  canvasAspectRatio: CanvasRatio; // default '16:9'
 }
 
 export interface RoomParticipant extends User {

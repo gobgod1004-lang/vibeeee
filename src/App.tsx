@@ -1,19 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, RoomState, MeetingArchive, StickyNote, DrawingLine } from './types';
+import { User, RoomState, MeetingArchive, StickyNote, DrawingLine, CanvasRatio, RoomSettings } from './types';
 import { getOrCreateLocalUser, saveLocalUser, getLocalMeetingArchives, saveMeetingArchive, deleteMeetingArchive } from './utils/storage';
 import { socketClient } from './utils/socketClient';
 import { Header } from './components/Header';
+import { GuideModal } from './components/GuideModal';
 import { LoginModal } from './components/LoginModal';
 import { HomeView } from './components/HomeView';
 import { LobbyView } from './components/LobbyView';
 import { BrainwritingView } from './components/BrainwritingView';
 import { DiscussionView } from './components/DiscussionView';
 import { HistoryDetailModal } from './components/HistoryDetailModal';
+import { RoomRatioSettingsModal } from './components/RoomRatioSettingsModal';
 
 export default function App() {
   // Device user profile (persisted in localStorage across sessions)
-  const [user, setUser] = useState<User>(() => getOrCreateLocalUser());
+  const [user, setUser] = useState<User>(() => {
+    const u = getOrCreateLocalUser();
+    if (!u.name || !u.name.trim()) {
+      u.name = `참가자_${Math.floor(100 + Math.random() * 900)}`;
+      saveLocalUser(u);
+    }
+    return u;
+  });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Past meetings archive (persisted on this device)
   const [archives, setArchives] = useState<MeetingArchive[]>(() => getLocalMeetingArchives());
@@ -38,13 +49,9 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('code');
     if (codeParam && !room) {
-      if (!user.name) {
-        setIsLoginModalOpen(true);
-      } else {
-        handleJoinRoom(codeParam.toUpperCase());
-      }
+      handleJoinRoom(codeParam.toUpperCase());
     }
-  }, [user.name]);
+  }, []);
 
   // WebSocket Subscription
   useEffect(() => {
@@ -123,34 +130,45 @@ export default function App() {
   // Create Room
   const handleCreateRoom = async (
     topic: string,
-    settings: { roundDurationSec: number; totalRounds: number; isAnonymous: boolean }
-  ) => {
-    if (!user.name) {
-      setIsLoginModalOpen(true);
-      return;
+    settings: { 
+      roundDurationSec: number; 
+      totalRounds: number; 
+      isAnonymous: boolean;
+      canvasAspectRatio?: CanvasRatio;
+      ideasPerRound?: number;
     }
+  ) => {
     setIsLoading(true);
     setErrorMessage('');
+
+    const effectiveUser: User = {
+      ...user,
+      name: user.name?.trim() || `참가자_${Math.floor(100 + Math.random() * 900)}`,
+    };
+    if (effectiveUser.name !== user.name) {
+      handleSaveUser(effectiveUser);
+    }
 
     try {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic,
-          hostUser: user,
+          topic: topic?.trim() || '새로운 아이디어 기획 회의',
+          hostUser: effectiveUser,
           settings,
         }),
       });
 
       if (!res.ok) {
-        throw new Error('방 생성 실패');
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `방 생성에 실패했습니다 (코드: ${res.status})`);
       }
 
       const data = await res.json();
       setRoom(data.room);
       // Connect WebSocket
-      socketClient.connect(data.room.code, user);
+      socketClient.connect(data.room.code, effectiveUser);
     } catch (e: any) {
       setErrorMessage(e.message || '방 생성 중 문제가 발생했습니다.');
     } finally {
@@ -160,12 +178,16 @@ export default function App() {
 
   // Join Room
   const handleJoinRoom = async (code: string) => {
-    if (!user.name) {
-      setIsLoginModalOpen(true);
-      return;
-    }
     setIsLoading(true);
     setErrorMessage('');
+
+    const effectiveUser: User = {
+      ...user,
+      name: user.name?.trim() || `참가자_${Math.floor(100 + Math.random() * 900)}`,
+    };
+    if (effectiveUser.name !== user.name) {
+      handleSaveUser(effectiveUser);
+    }
 
     try {
       const res = await fetch(`/api/rooms/${code}`);
@@ -176,7 +198,7 @@ export default function App() {
       const data = await res.json();
       setRoom(data.room);
       // Connect WebSocket
-      socketClient.connect(data.room.code, user);
+      socketClient.connect(data.room.code, effectiveUser);
     } catch (e: any) {
       setErrorMessage(e.message || '방 입장 중 문제가 발생했습니다.');
     } finally {
@@ -206,9 +228,9 @@ export default function App() {
   };
 
   // Brainwriting actions
-  const handleSubmitIdeas = (sheetId: string, round: number, ideas: [string, string, string]) => {
+  const handleSubmitIdeas = (sheetId: string, round: number, ideas: string[]) => {
     if (!room) return;
-    socketClient.submitIdeas(room.code, user.id, sheetId, round, ideas);
+    socketClient.submitIdeas(room.code, user.id, sheetId, round, ideas as [string, string, string]);
   };
 
   const handleAdvanceRound = () => {
@@ -278,6 +300,7 @@ export default function App() {
       <Header
         user={user}
         onOpenUserModal={() => setIsLoginModalOpen(true)}
+        onOpenGuideModal={() => setIsGuideModalOpen(true)}
         onOpenHistoryModal={() => {
           if (archives.length > 0) {
             setSelectedArchive(archives[0]);
@@ -358,6 +381,7 @@ export default function App() {
             onClearLines={handleClearLines}
             onSendChat={handleSendChat}
             onLeaveToHome={handleLeaveRoom}
+            onOpenSettings={() => setIsSettingsModalOpen(true)}
           />
         )}
       </main>
@@ -365,11 +389,30 @@ export default function App() {
       {/* Login & User Profile Modal */}
       <LoginModal
         user={user}
-        isOpen={isLoginModalOpen || !user.name}
+        isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         onSave={handleSaveUser}
-        title={user.name ? '프로필 및 닉네임 수정' : '참여자 닉네임 설정'}
-        subtitle="모둠원들과 아이디어를 나눌 때 사용할 이름을 입력해 주세요. (동일 기기 방문 시 자동 유지)"
+        title="계정 및 사용자 설정"
+        subtitle="로그인하거나 닉네임을 변경하여 이전 활동 기록을 동기화할 수 있습니다."
+      />
+
+      {/* Room Ratio & Methodology Settings Modal */}
+      <RoomRatioSettingsModal
+        isOpen={isSettingsModalOpen}
+        currentSettings={room?.settings || {
+          roundDurationSec: 300,
+          totalRounds: 5,
+          isAnonymous: true,
+          canvasAspectRatio: '16:9',
+          ideasPerRound: 3,
+        }}
+        onSave={(newSettings) => {
+          if (room) {
+            handleUpdateSettings(newSettings);
+          }
+          setIsSettingsModalOpen(false);
+        }}
+        onClose={() => setIsSettingsModalOpen(false)}
       />
 
       {/* History Detail Modal */}
@@ -377,6 +420,12 @@ export default function App() {
         archive={selectedArchive}
         isOpen={Boolean(selectedArchive)}
         onClose={() => setSelectedArchive(null)}
+      />
+
+      {/* 6-3-5 Methodology Guide Modal */}
+      <GuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
       />
     </div>
   );

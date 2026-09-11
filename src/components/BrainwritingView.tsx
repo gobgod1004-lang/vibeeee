@@ -6,7 +6,7 @@ import confetti from 'canvas-confetti';
 interface BrainwritingViewProps {
   room: RoomState;
   currentUser: User;
-  onSubmitIdeas: (sheetId: string, round: number, ideas: [string, string, string]) => void;
+  onSubmitIdeas: (sheetId: string, round: number, ideas: string[]) => void;
   onAdvanceRound: () => void;
   onSkipTimer: () => void;
   onAdjustTimer: (deltaSec: number) => void;
@@ -29,6 +29,7 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
   const isHost = room.hostId === currentUser.id;
   const currentRound = room.currentRound || 1;
   const totalRounds = room.settings.totalRounds || 5;
+  const ideasCount = room.settings.ideasPerRound || 3;
 
   // Find current user's participant index
   const participantIndex = Math.max(
@@ -38,33 +39,26 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
   const totalParticipants = room.participants.length || 1;
 
   // Calculate which sheet current user is holding in this round:
-  // In round 1, person i gets sheet i.
-  // In round r, paper is passed to the right, so person i has sheet (i - (r - 1) + k*N) % N.
   const sheetIndex = (participantIndex - (currentRound - 1) % totalParticipants + totalParticipants) % totalParticipants;
   const currentSheet: BrainSheet | undefined = room.sheets[sheetIndex] || room.sheets[0];
 
-  // Local state for the 3 ideas of the current round
-  const [idea1, setIdea1] = useState('');
-  const [idea2, setIdea2] = useState('');
-  const [idea3, setIdea3] = useState('');
+  // Dynamic local state for the ideas of the current round
+  const [ideas, setIdeas] = useState<string[]>(() => new Array(ideasCount).fill(''));
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // When round changes, reset input fields or load if already submitted
+  // When round changes or ideasCount changes, reset input fields or load if already submitted
   useEffect(() => {
     if (!currentSheet) return;
     const existingRound = currentSheet.rounds.find((r) => r.round === currentRound);
     if (existingRound) {
-      setIdea1(existingRound.ideas[0] || '');
-      setIdea2(existingRound.ideas[1] || '');
-      setIdea3(existingRound.ideas[2] || '');
+      const loadedIdeas = new Array(ideasCount).fill('').map((_, i) => existingRound.ideas[i] || '');
+      setIdeas(loadedIdeas);
       setIsSubmitted(true);
     } else {
-      setIdea1('');
-      setIdea2('');
-      setIdea3('');
+      setIdeas(new Array(ideasCount).fill(''));
       setIsSubmitted(false);
     }
-  }, [currentRound, currentSheet?.sheetId]);
+  }, [currentRound, currentSheet?.sheetId, ideasCount]);
 
   // Format timer
   const minutes = Math.floor(room.timerRemaining / 60);
@@ -72,15 +66,24 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const isTimeCritical = room.timerRemaining <= 30;
 
+  const handleIdeaChange = (index: number, val: string) => {
+    setIdeas((prev) => {
+      const next = [...prev];
+      next[index] = val;
+      return next;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentSheet) return;
-    if (!idea1.trim() && !idea2.trim() && !idea3.trim()) {
+    const trimmedIdeas = ideas.map((i) => i.trim());
+    if (trimmedIdeas.every((i) => !i)) {
       alert('최소 1개 이상의 아이디어를 적어주세요!');
       return;
     }
 
-    onSubmitIdeas(currentSheet.sheetId, currentRound, [idea1.trim(), idea2.trim(), idea3.trim()]);
+    onSubmitIdeas(currentSheet.sheetId, currentRound, trimmedIdeas);
     setIsSubmitted(true);
 
     confetti({
@@ -296,84 +299,56 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
           </div>
         )}
 
-        {/* Current Round: 3 Ideas Input Form */}
+        {/* Current Round: Dynamic Ideas Input Form */}
         <form onSubmit={handleSubmit} className="mt-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-stone-900">
-              현재 라운드({currentRound}) 나의 3가지 아이디어 작성
+              현재 라운드({currentRound}) 나의 {ideasCount}가지 아이디어 작성
             </h3>
             <span className="text-xs text-stone-700">
-              {isSubmitted ? '✅ 제출 완료 (수정 가능)' : '3가지를 모두 적고 제출해 주세요'}
+              {isSubmitted ? '✅ 제출 완료 (수정 가능)' : `${ideasCount}가지를 적고 제출해 주세요`}
             </span>
           </div>
 
           <div className="space-y-3">
-            {/* Idea 1 */}
-            <div className="rounded-xl border border-stone-200 bg-stone-50/40 p-3 transition-colors focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/20">
-              <label htmlFor="idea-input-1" className="flex items-center justify-between text-xs font-bold text-stone-700">
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">1</span>
-                  첫 번째 아이디어
-                </span>
-                <span className="text-[11px] text-stone-600 font-normal">{idea1.length}/150자</span>
-              </label>
-              <textarea
-                id="idea-input-1"
-                rows={2}
-                maxLength={150}
-                required
-                placeholder={
-                  currentRound === 1
-                    ? '가장 먼저 떠오른 번뜩이는 해결책이나 아이디어를 적어보세요.'
-                    : '앞사람의 아이디어 중 하나를 골라 더 발전시키거나 구체적인 실행 방안을 적어보세요.'
-                }
-                value={idea1}
-                onChange={(e) => setIdea1(e.target.value)}
-                className="mt-1.5 w-full resize-none bg-transparent text-sm text-stone-900 placeholder:text-stone-500 focus:outline-none"
-              />
-            </div>
+            {ideas.map((ideaText, idx) => {
+              const defaultPlaceholders = [
+                currentRound === 1
+                  ? '가장 먼저 떠오른 번뜩이는 해결책이나 아이디어를 적어보세요.'
+                  : '앞사람의 아이디어 중 하나를 골라 더 발전시키거나 구체적인 실행 방안을 적어보세요.',
+                '다른 각도에서 바라본 대안이나 색다른 접근 방식을 적어보세요.',
+                '조금은 엉뚱하거나 파격적이어도 괜찮습니다. 자유롭게 확장해 보세요!',
+                '기술적이거나 운영 측면에서의 현실적 보완점을 적어보세요.',
+                '고객이나 팀원의 반응을 고려한 세부 개선안을 적어보세요.',
+              ];
+              const placeholder = defaultPlaceholders[idx] || `아이디어 #${idx + 1}을(를) 적어주세요.`;
 
-            {/* Idea 2 */}
-            <div className="rounded-xl border border-stone-200 bg-stone-50/40 p-3 transition-colors focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/20">
-              <label htmlFor="idea-input-2" className="flex items-center justify-between text-xs font-bold text-stone-700">
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">2</span>
-                  두 번째 아이디어
-                </span>
-                <span className="text-[11px] text-stone-600 font-normal">{idea2.length}/150자</span>
-              </label>
-              <textarea
-                id="idea-input-2"
-                rows={2}
-                maxLength={150}
-                required
-                placeholder="다른 각도에서 바라본 대안이나 색다른 접근 방식을 적어보세요."
-                value={idea2}
-                onChange={(e) => setIdea2(e.target.value)}
-                className="mt-1.5 w-full resize-none bg-transparent text-sm text-stone-900 placeholder:text-stone-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Idea 3 */}
-            <div className="rounded-xl border border-stone-200 bg-stone-50/40 p-3 transition-colors focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/20">
-              <label htmlFor="idea-input-3" className="flex items-center justify-between text-xs font-bold text-stone-700">
-                <span className="flex items-center gap-1.5">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">3</span>
-                  세 번째 아이디어
-                </span>
-                <span className="text-[11px] text-stone-600 font-normal">{idea3.length}/150자</span>
-              </label>
-              <textarea
-                id="idea-input-3"
-                rows={2}
-                maxLength={150}
-                required
-                placeholder="조금은 엉뚱하거나 파격적이어도 괜찮습니다. 자유롭게 확장해 보세요!"
-                value={idea3}
-                onChange={(e) => setIdea3(e.target.value)}
-                className="mt-1.5 w-full resize-none bg-transparent text-sm text-stone-900 placeholder:text-stone-500 focus:outline-none"
-              />
-            </div>
+              return (
+                <div
+                  key={idx}
+                  className="rounded-xl border border-stone-200 bg-stone-50/40 p-3 transition-colors focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/20"
+                >
+                  <label htmlFor={`idea-input-${idx + 1}`} className="flex items-center justify-between text-xs font-bold text-stone-700">
+                    <span className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                        {idx + 1}
+                      </span>
+                      {idx === 0 ? '첫 번째 아이디어' : idx === 1 ? '두 번째 아이디어' : `${idx + 1}번째 아이디어`}
+                    </span>
+                    <span className="text-[11px] text-stone-600 font-normal">{ideaText.length}/150자</span>
+                  </label>
+                  <textarea
+                    id={`idea-input-${idx + 1}`}
+                    rows={2}
+                    maxLength={150}
+                    placeholder={placeholder}
+                    value={ideaText}
+                    onChange={(e) => handleIdeaChange(idx, e.target.value)}
+                    className="mt-1.5 w-full resize-none bg-transparent text-sm text-stone-900 placeholder:text-stone-500 focus:outline-none"
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* Submit & Status Bar */}
