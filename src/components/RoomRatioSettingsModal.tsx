@@ -5,7 +5,8 @@ import { Settings, Sliders, Monitor, Lightbulb, Clock, RotateCcw, X, Check, Shie
 interface RoomRatioSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  settings: RoomSettings;
+  settings?: RoomSettings;
+  currentSettings?: RoomSettings;
   onSave: (newSettings: RoomSettings) => void;
   isHost?: boolean;
 }
@@ -29,21 +30,47 @@ export const RoomRatioSettingsModal: React.FC<RoomRatioSettingsModalProps> = ({
   isOpen,
   onClose,
   settings,
+  currentSettings,
   onSave,
   isHost = true,
 }) => {
-  const [ideasPerRound, setIdeasPerRound] = useState(settings.ideasPerRound || 3);
-  const [canvasAspectRatio, setCanvasAspectRatio] = useState<CanvasRatio>(settings.canvasAspectRatio || '16:9');
-  const [roundDurationMin, setRoundDurationMin] = useState(Math.round((settings.roundDurationSec || 300) / 60));
-  const [totalRounds, setTotalRounds] = useState(settings.totalRounds || 5);
-  const [isAnonymous, setIsAnonymous] = useState(settings.isAnonymous ?? true);
+  const activeSettings = settings || currentSettings || {
+    roundDurationSec: 300,
+    totalRounds: 5,
+    isAnonymous: true,
+    canvasAspectRatio: '16:9' as CanvasRatio,
+    ideasPerRound: 3,
+  };
+
+  const [ideasPerRound, setIdeasPerRound] = useState<number>(() => activeSettings.ideasPerRound || 3);
+  const [canvasAspectRatio, setCanvasAspectRatio] = useState<CanvasRatio>(() => activeSettings.canvasAspectRatio || '16:9');
+  const [roundDurationMin, setRoundDurationMin] = useState<number>(() => Math.round((activeSettings.roundDurationSec || 300) / 60));
+  const [totalRounds, setTotalRounds] = useState<number>(() => activeSettings.totalRounds || 5);
+  const [isAnonymous, setIsAnonymous] = useState<boolean>(() => activeSettings.isAnonymous ?? true);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setIdeasPerRound(activeSettings.ideasPerRound || 3);
+      setCanvasAspectRatio(activeSettings.canvasAspectRatio || '16:9');
+      setRoundDurationMin(Math.round((activeSettings.roundDurationSec || 300) / 60));
+      setTotalRounds(activeSettings.totalRounds || 5);
+      setIsAnonymous(activeSettings.isAnonymous ?? true);
+    }
+  }, [
+    isOpen,
+    activeSettings.ideasPerRound,
+    activeSettings.canvasAspectRatio,
+    activeSettings.roundDurationSec,
+    activeSettings.totalRounds,
+    activeSettings.isAnonymous,
+  ]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
-      ...settings,
+      ...activeSettings,
       ideasPerRound,
       canvasAspectRatio,
       roundDurationSec: roundDurationMin * 60,

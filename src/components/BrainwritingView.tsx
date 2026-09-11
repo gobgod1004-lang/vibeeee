@@ -28,8 +28,8 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
 }) => {
   const isHost = room.hostId === currentUser.id;
   const currentRound = room.currentRound || 1;
-  const totalRounds = room.settings.totalRounds || 5;
-  const ideasCount = room.settings.ideasPerRound || 3;
+  const totalRounds = room.settings?.totalRounds || 5;
+  const ideasCount = room.settings?.ideasPerRound || 3;
 
   // Find current user's participant index
   const participantIndex = Math.max(
@@ -165,10 +165,10 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
             <button
               id="host-toggle-anonymity-btn"
               type="button"
-              onClick={() => onToggleAnonymity(!room.settings.isAnonymous)}
+              onClick={() => onToggleAnonymity(!room.settings?.isAnonymous)}
               className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 font-semibold text-amber-900 hover:bg-amber-50"
             >
-              {room.settings.isAnonymous ? (
+              {room.settings?.isAnonymous ? (
                 <>
                   <EyeOff className="h-3.5 w-3.5 text-indigo-600" />
                   <span>익명 활성 (숨김)</span>
@@ -238,7 +238,7 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-xs text-stone-700">원작성자:</span>
             <span className="rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-900">
-              {room.settings.isAnonymous ? '🎭 익명' : currentSheet?.originalOwnerName || '참여자'}
+              {room.settings?.isAnonymous ? '🎭 익명' : currentSheet?.originalOwnerName || '참여자'}
             </span>
           </div>
         </div>
@@ -265,7 +265,7 @@ export const BrainwritingView: React.FC<BrainwritingViewProps> = ({
                       라운드 {rnd.round} 아이디어
                     </span>
                     <span className="text-stone-700">
-                      작성: {room.settings.isAnonymous ? '익명 참가자' : rnd.authorName}
+                      작성: {room.settings?.isAnonymous ? '익명 참가자' : rnd.authorName}
                     </span>
                   </div>
 

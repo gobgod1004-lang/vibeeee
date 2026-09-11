@@ -33,7 +33,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const roundDurationMin = Math.round(room.settings.roundDurationSec / 60);
+  const roundDurationMin = Math.round((room?.settings?.roundDurationSec || 300) / 60);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -204,14 +204,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <input
                       id="lobby-anonymity-toggle"
                       type="checkbox"
-                      checked={room.settings.isAnonymous}
+                      checked={room?.settings?.isAnonymous ?? true}
                       onChange={(e) => onUpdateSettings({ isAnonymous: e.target.checked })}
                       className="h-4 w-4 rounded border-stone-300 text-indigo-600 focus:ring-indigo-500"
                     />
                   </label>
                 ) : (
                   <div className="mt-1.5 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-800 font-medium">
-                    {room.settings.isAnonymous ? '✅ 작성자 익명 모드 적용됨' : '👥 작성자 이름 표시 모드'}
+                    {room?.settings?.isAnonymous ? '✅ 작성자 익명 모드 적용됨' : '👥 작성자 이름 표시 모드'}
                   </div>
                 )}
               </div>
@@ -248,7 +248,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 {isHost ? (
                   <select
                     id="lobby-total-rounds-select"
-                    value={room.settings.totalRounds}
+                    value={room?.settings?.totalRounds || 5}
                     onChange={(e) => onUpdateSettings({ totalRounds: Number(e.target.value) })}
                     className="mt-1.5 w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-900 focus:border-indigo-500 focus:bg-white"
                   >
@@ -259,7 +259,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 ) : (
                   <div className="mt-1.5 flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-800 font-medium">
                     <RotateCcw className="h-4 w-4 text-stone-500" />
-                    <span>{room.settings.totalRounds}회 로테이션 반복</span>
+                    <span>{room?.settings?.totalRounds || 5}회 로테이션 반복</span>
                   </div>
                 )}
               </div>
