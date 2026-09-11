@@ -1,0 +1,6 @@
+{
+  "name": "사일런트 브레인스토밍",
+  "description": "모둠 활동의 정적을 깨고 체계적으로 아이디어를 발전시키는 브레인라이팅(6-3-5) 협업 플랫폼",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
